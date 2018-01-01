@@ -1,6 +1,10 @@
 package bson
 
-import "time"
+import (
+	"bytes"
+	"errors"
+	"fmt"
+)
 
 // element	::=	"\x01" e_name double	64-bit binary floating point
 // |	"\x02" e_name string	UTF-8 string
@@ -24,206 +28,333 @@ import "time"
 // |	"\xFF" e_name	Min key
 // |	"\x7F" e_name	Max key
 
+type BSONElement interface {
+	Serializable
+	String() string
+}
+
 type Element struct {
 	Identifier byte
 	EName      CString
-	Data       BSON
+	Data       BSONElement
 }
 
-func (e Element) ToBSON() []byte {
+func (e *Element) Deserialize(in *bytes.Reader) error {
+	var err error
+	e.Identifier, err = in.ReadByte()
+	if err != nil {
+		return err
+	}
+
+	err = e.EName.Deserialize(in)
+
+	switch e.Identifier {
+	case 0x01: // Double
+		e.Data = new(Double)
+		err := e.Data.Deserialize(in)
+		if err != nil {
+			return err
+		}
+	case 0x02, 0x0D: // String, COde
+		e.Data = new(String)
+		err := e.Data.Deserialize(in)
+		if err != nil {
+			return err
+		}
+	case 0x03, 0x04: // Document embeeded / array
+		e.Data = new(Document)
+		err := e.Data.Deserialize(in)
+		if err != nil {
+			return err
+		}
+	case 0x05: //binary
+		e.Data = new(Binary)
+		err := e.Data.Deserialize(in)
+		if err != nil {
+			return err
+		}
+	// case 0x06: //undefined
+	// 	e.Data = new(String)
+	// 	err := e.Data.Deserialize(in)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	case 0x07: //obejctid
+		e.Data = new(ObjectId)
+		err := e.Data.Deserialize(in)
+		if err != nil {
+			return err
+		}
+	case 0x08: //boolean
+		e.Data = new(Byte)
+		err := e.Data.Deserialize(in)
+		if err != nil {
+			return err
+		}
+	case 0x09, 0x11, 0x12: // UTC Datetime, 64bit uint (i know i know, i'm lazy), 64bit
+		e.Data = new(Int64)
+		err := e.Data.Deserialize(in)
+		if err != nil {
+			return err
+		}
+	case 0x10: // int32
+		e.Data = new(Int32)
+		err := e.Data.Deserialize(in)
+		if err != nil {
+			return err
+		}
+	case 0x0A: //Null
+		e.Data = new(Null)
+		err := e.Data.Deserialize(in)
+		if err != nil {
+			return err
+		}
+	case 0x0B: // Regex
+		e.Data = new(RegExp)
+		err := e.Data.Deserialize(in)
+		if err != nil {
+			return err
+		}
+
+	// case 0x0F: // code_w_s
+	// 	e.Data = new()
+	// 	err := e.Data.Deserialize(in)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// case 0x13: // String
+	// 	e.Data = new(Int32)
+	// 	err := e.Data.Deserialize(in)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	case 0xFF: // MinKey
+		e.Data = new(MinKey)
+		err := e.Data.Deserialize(in)
+		if err != nil {
+			return err
+		}
+
+	case 0x7F: // MaxKey
+		e.Data = new(MaxKey)
+		err := e.Data.Deserialize(in)
+		if err != nil {
+			return err
+		}
+	default:
+		return errors.New(fmt.Sprintf("unknown type %x", e.Identifier))
+	}
+
+	return nil
+}
+
+func (e Element) Serialize() ([]byte, error) {
+
+	ename, err := e.EName.Serialize()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := e.Data.Serialize()
+	if err != nil {
+		return nil, err
+	}
+
 	out := []byte{}
 	out = append(out, e.Identifier)
-	out = append(out, e.EName.ToBSON()...)
-	out = append(out, e.Data.ToBSON()...)
-	return out
+	out = append(out, ename...)
+	out = append(out, data...)
+	return out, nil
 }
 
-func (e Element) ToString() string {
-	return e.EName.ToString() + ": " + e.Data.ToString()
+func (e Element) String() string {
+	return e.EName.String() + ": " + e.Data.String()
 }
 
-func NewDoubleElement(ename string, data float64) Element {
-	e := Element{}
-	e.Identifier = byte(1)
-	e.EName = CString(ename)
-	e.Data = Double(data)
-	return e
-}
-
-func NewStringElement(ename, data string) Element {
-	e := Element{}
-	e.Identifier = byte(2)
-	e.EName = CString(ename)
-	e.Data = String(data)
-
-	return e
-}
-
-func NewEmbeddedDocument(ename string, data Document) Element {
-	e := Element{}
-	e.Identifier = byte(3)
-	e.EName = CString(ename)
-	e.Data = data
-	return e
-}
-
-func NewArrayElement(ename string, data []Element) Element {
-	e := Element{}
-	e.Identifier = byte(4)
-	e.EName = CString(ename)
-	e.Data = Document(data)
-	return e
-}
-
-func NewBinaryElement(ename string, data []byte, subtype byte) Element {
-	e := Element{}
-	e.Identifier = byte(4)
-	e.EName = CString(ename)
-	e.Data = Binary{subtype, data}
-	return e
-}
-
-func NewUndefinedElement(ename string) Element {
-	e := Element{}
-	e.Identifier = byte(6)
-	e.EName = CString(ename)
-	e.Data = Null(0)
-
-	return e
-}
-
-////
-func NewObjectIdElement(ename string, data []byte) Element {
-	e := Element{}
-	e.Identifier = byte(7)
-	e.EName = CString(ename)
-	e.Data = ObjectId(data)
-
-	return e
-}
-
-func NewTrueElement(ename string) Element {
-	e := Element{}
-	e.Identifier = byte(8)
-	e.EName = CString(ename)
-	e.Data = Byte(1)
-
-	return e
-}
-
-func NewFalseElement(ename string) Element {
-	e := Element{}
-	e.Identifier = byte(8)
-	e.EName = CString(ename)
-	e.Data = Byte(0)
-
-	return e
-}
-
-func NewUTCElement(ename string, tc time.Time) Element {
-	e := Element{}
-	e.Identifier = byte('\x09')
-	e.EName = CString(ename)
-	e.Data = Int64(tc.Unix())
-
-	return e
-}
-
-func NewNullElement(ename string) Element {
-	e := Element{}
-	e.Identifier = byte('\x0A')
-	e.EName = CString(ename)
-	e.Data = Null(0)
-
-	return e
-}
-
-func NewRegularExpressionElement(ename, regexp, options string) Element {
-	e := Element{}
-	e.Identifier = byte('\x0B')
-	e.EName = CString(ename)
-	e.Data = RegExp{CString(regexp), CString(options)}
-
-	return e
-}
-
-func NewDBPointerElement(ename, namespace string, objectid []byte) Element {
-	e := Element{}
-	e.Identifier = byte('\x0C')
-	e.EName = CString(ename)
-	e.Data = DBPointer{String(namespace), ObjectId(objectid)}
-
-	return e
-}
-
-func NewJavascriptCodeElement(ename string, code string) Element {
-	e := Element{}
-	e.Identifier = byte('\x0D')
-	e.EName = CString(ename)
-	e.Data = String(code)
-
-	return e
-}
-
-func NewSymbolElement(ename string, data string) Element {
-	e := Element{}
-	e.Identifier = byte('\x0E')
-	e.EName = CString(ename)
-	e.Data = String(data)
-
-	return e
-}
-
-// func NewJavascriptWithScopeElement(ename string, data int32) Element {
+// func NewDoubleElement(ename string, data float64) Element {
 // 	e := Element{}
-// 	e.Identifier = byte('\x0F')
+// 	e.Identifier = byte(1)
+// 	e.EName = CString(ename)
+// 	double := Double(data)
+// 	e.Data = &double
+// 	return e
+// }
+
+// func NewStringElement(ename, data string) Element {
+// 	e := Element{}
+// 	e.Identifier = byte(2)
+// 	e.EName = CString(ename)
+// 	d := String(data)
+// 	e.Data = &d
+
+// 	return e
+// }
+
+// func NewEmbeddedDocument(ename string, data Document) Element {
+// 	e := Element{}
+// 	e.Identifier = byte(3)
+// 	e.EName = CString(ename)
+// 	e.Data = data
+// 	return e
+// }
+
+// func NewArrayElement(ename string, data []Element) Element {
+// 	e := Element{}
+// 	e.Identifier = byte(4)
+// 	e.EName = CString(ename)
+// 	e.Data = Document(data)
+// 	return e
+// }
+
+// func NewBinaryElement(ename string, data []byte, subtype byte) Element {
+// 	e := Element{}
+// 	e.Identifier = byte(4)
+// 	e.EName = CString(ename)
+// 	e.Data = Binary{subtype, data}
+// 	return e
+// }
+
+// func NewUndefinedElement(ename string) Element {
+// 	e := Element{}
+// 	e.Identifier = byte(6)
+// 	e.EName = CString(ename)
+// 	e.Data = Null(0)
+
+// 	return e
+// }
+
+// ////
+// func NewObjectIdElement(ename string, data []byte) Element {
+// 	e := Element{}
+// 	e.Identifier = byte(7)
+// 	e.EName = CString(ename)
+// 	e.Data = ObjectId(data)
+
+// 	return e
+// }
+
+// func NewTrueElement(ename string) Element {
+// 	e := Element{}
+// 	e.Identifier = byte(8)
+// 	e.EName = CString(ename)
+// 	e.Data = Byte(1)
+
+// 	return e
+// }
+
+// func NewFalseElement(ename string) Element {
+// 	e := Element{}
+// 	e.Identifier = byte(8)
+// 	e.EName = CString(ename)
+// 	e.Data = Byte(0)
+
+// 	return e
+// }
+
+// func NewUTCElement(ename string, tc time.Time) Element {
+// 	e := Element{}
+// 	e.Identifier = byte('\x09')
+// 	e.EName = CString(ename)
+// 	e.Data = Int64(tc.Unix())
+
+// 	return e
+// }
+
+// func NewNullElement(ename string) Element {
+// 	e := Element{}
+// 	e.Identifier = byte('\x0A')
+// 	e.EName = CString(ename)
+// 	e.Data = Null(0)
+
+// 	return e
+// }
+
+// func NewRegularExpressionElement(ename, regexp, options string) Element {
+// 	e := Element{}
+// 	e.Identifier = byte('\x0B')
+// 	e.EName = CString(ename)
+// 	e.Data = RegExp{CString(regexp), CString(options)}
+
+// 	return e
+// }
+
+// func NewDBPointerElement(ename, namespace string, objectid []byte) Element {
+// 	e := Element{}
+// 	e.Identifier = byte('\x0C')
+// 	e.EName = CString(ename)
+// 	e.Data = DBPointer{String(namespace), ObjectId(objectid)}
+
+// 	return e
+// }
+
+// func NewJavascriptCodeElement(ename string, code string) Element {
+// 	e := Element{}
+// 	e.Identifier = byte('\x0D')
+// 	e.EName = CString(ename)
+// 	e.Data = String(code)
+
+// 	return e
+// }
+
+// func NewSymbolElement(ename string, data string) Element {
+// 	e := Element{}
+// 	e.Identifier = byte('\x0E')
+// 	e.EName = CString(ename)
+// 	e.Data = String(data)
+
+// 	return e
+// }
+
+// // func NewJavascriptWithScopeElement(ename string, data int32) Element {
+// // 	e := Element{}
+// // 	e.Identifier = byte('\x0F')
+// // 	e.EName = CString(ename)
+// // 	e.Data = Int32(data)
+
+// // 	return e
+// // }
+
+// func NewInt32Element(ename string, data int32) Element {
+// 	e := Element{}
+// 	e.Identifier = byte('\x10')
 // 	e.EName = CString(ename)
 // 	e.Data = Int32(data)
 
 // 	return e
 // }
 
-func NewInt32Element(ename string, data int32) Element {
-	e := Element{}
-	e.Identifier = byte('\x10')
-	e.EName = CString(ename)
-	e.Data = Int32(data)
+// func NewTimeStampElement(ename string, tc time.Time) Element {
+// 	e := Element{}
+// 	e.Identifier = byte('\x11')
+// 	e.EName = CString(ename)
+// 	e.Data = Int64(tc.Unix())
 
-	return e
-}
+// 	return e
+// }
 
-func NewTimeStampElement(ename string, tc time.Time) Element {
-	e := Element{}
-	e.Identifier = byte('\x11')
-	e.EName = CString(ename)
-	e.Data = Int64(tc.Unix())
+// func NewInt64Element(ename string, data int64) Element {
+// 	e := Element{}
+// 	e.Identifier = byte('\x12')
+// 	e.EName = CString(ename)
+// 	e.Data = Int64(data)
 
-	return e
-}
+// 	return e
+// }
 
-func NewInt64Element(ename string, data int64) Element {
-	e := Element{}
-	e.Identifier = byte('\x12')
-	e.EName = CString(ename)
-	e.Data = Int64(data)
+// func NewMinKeyElement(ename string, data int32) Element {
+// 	e := Element{}
+// 	e.Identifier = byte('\xFF')
+// 	e.EName = CString(ename)
+// 	e.Data = Null(0)
 
-	return e
-}
+// 	return e
+// }
 
-func NewMinKeyElement(ename string, data int32) Element {
-	e := Element{}
-	e.Identifier = byte('\xFF')
-	e.EName = CString(ename)
-	e.Data = Null(0)
+// func NewMaxKeyElement(ename string, data int32) Element {
+// 	e := Element{}
+// 	e.Identifier = byte('\x7F')
+// 	e.EName = CString(ename)
+// 	e.Data = Null(0)
 
-	return e
-}
-
-func NewMaxKeyElement(ename string, data int32) Element {
-	e := Element{}
-	e.Identifier = byte('\x7F')
-	e.EName = CString(ename)
-	e.Data = Null(0)
-
-	return e
-}
+// 	return e
+// }

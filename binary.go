@@ -1,6 +1,11 @@
 package bson
 
-import "fmt"
+import (
+	"bytes"
+	"encoding/binary"
+	"errors"
+	"fmt"
+)
 
 const (
 	BINARY_GENERIC byte = iota
@@ -25,12 +30,41 @@ type Binary struct {
 	Data    []byte
 }
 
-func (b Binary) ToBSON() []byte {
-	length := len(b.Data) + 1
-	out := append(Int32(length).ToBSON(), b.Data...)
-	return append(out, byte(0))
+func (b Binary) Serialize() ([]byte, error) {
+
+	length, err := Int32(len(b.Data) + 1).Serialize()
+	if err != nil {
+		return nil, err
+	}
+
+	out := append(length, b.Subtype)
+	out = append(out, b.Data...)
+	return out, nil
 }
 
-func (b Binary) ToString() string {
+func (b *Binary) Deserialize(in *bytes.Reader) error {
+
+	length := int(0)
+	err := binary.Read(in, binary.LittleEndian, &length)
+
+	if err != nil {
+		return err
+	}
+
+	b.Data = make([]byte, length)
+	n, err := in.Read(b.Data)
+
+	if err != nil {
+		return err
+	}
+
+	if n != length {
+		return errors.New("invalid string length")
+	}
+
+	return nil
+}
+
+func (b Binary) String() string {
 	return fmt.Sprintf("binary{%s, %h}", BinaryTypeMap[b.Subtype], b.Data)
 }
