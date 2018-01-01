@@ -26,3 +26,42 @@ func TestDocuments(t *testing.T) {
 	SerializableTest(t, document2)
 
 }
+
+func TestDocumentManual(t *testing.T) {
+	in1 := bytes.NewReader([]byte("\x16\x00\x00\x00\x02hello\x00\x06\x00\x00\x00world\x00\x00"))
+	document1 := new(Document)
+	err := document1.Deserialize(in1)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if document1.Get(0).EName != CString("hello") {
+		t.Error("key value should of been hello!")
+	}
+
+	if document1.Get(0).Data.String() != CString("world").String() {
+		t.Error("value should of been world!")
+	}
+}
+
+func TestDocumentEdit(t *testing.T) {
+	in1 := bytes.NewReader([]byte("\x16\x00\x00\x00\x02hello\x00\x06\x00\x00\x00world\x00\x00"))
+	document1 := new(Document)
+	err := document1.Deserialize(in1)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if document1.Key("hello") == nil {
+		t.Error("Failed to find key")
+	}
+
+	replace := Int32(1337)
+	document1.Key("hello").Data = &replace
+
+	if document1.Get(0).Data.String() != replace.String() {
+		t.Error("value should of been world!")
+	}
+}

@@ -4,9 +4,23 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 )
 
 type Document []Element
+
+func (d Document) Get(i int) *Element {
+	return &[]Element(d)[i]
+}
+
+func (d Document) Key(name string) *Element {
+	for i, e := range []Element(d) {
+		if e.EName.String() == fmt.Sprintf("\"%s\"", name) {
+			return &[]Element(d)[i]
+		}
+	}
+	return nil
+}
 
 // document  ::= int32 e_list "\x00"
 // int32 is the total number of bytes comprising the document.
