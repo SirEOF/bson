@@ -360,5 +360,5 @@ func (id *ObjectId) Deserialize(in *bytes.Reader) error {
 }
 
 func (id ObjectId) String() string {
-	return fmt.Sprintf("ObjectId{%h}", id)
+	return fmt.Sprintf("ObjectId{%x}", []byte(id))
 }
