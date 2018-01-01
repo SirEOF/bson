@@ -79,6 +79,10 @@ func (d *Document) Deserialize(in *bytes.Reader) error {
 }
 
 func (d Document) String() string {
+	if len(d) == 0 {
+		return "{}"
+	}
+
 	out := "{"
 	for _, e := range d {
 		out += e.String() + ", "
