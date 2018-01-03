@@ -39,6 +39,48 @@ type Element struct {
 	Data       BSONElement
 }
 
+func NewDoubleElement(key string, d Double) Element {
+	return Element{Identifier: 1, EName: CString(key), Data: &d}
+}
+
+func NewStringElement(key, v string) Element {
+	return Element{Identifier: 2, EName: CString(key), Data: NewString(v)}
+}
+
+func NewDocumentElement(key string, d Document) Element {
+	return Element{Identifier: 3, EName: CString(key), Data: &d}
+}
+
+func NewArrayElement(key string, d []Element) Element {
+	data := Document(d)
+	return Element{Identifier: 4, EName: CString(key), Data: &data}
+}
+
+func NewBinaryElement(key string, d Binary) Element {
+	return Element{Identifier: 5, EName: CString(key), Data: &d}
+}
+
+func NewObjectIdElement(key string, d ObjectId) Element {
+	return Element{Identifier: 7, EName: CString(key), Data: &d}
+}
+
+func NewBooleanElement(key string, d Byte) Element {
+	return Element{Identifier: 8, EName: CString(key), Data: &d}
+}
+
+func NewNullElement(key string) Element {
+	a := Null(0)
+	return Element{Identifier: 0x0A, EName: CString(key), Data: &a}
+}
+
+func NewInt32Element(key string, d Int32) Element {
+	return Element{Identifier: 0x10, EName: CString(key), Data: &d}
+}
+
+func NewInt64Element(key string, d Int64) Element {
+	return Element{Identifier: 0x12, EName: CString(key), Data: &d}
+}
+
 func (e *Element) Deserialize(in *bytes.Reader) error {
 	var err error
 	e.Identifier, err = in.ReadByte()

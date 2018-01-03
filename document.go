@@ -15,7 +15,7 @@ func (d Document) Get(i int) *Element {
 
 func (d Document) Key(name string) *Element {
 	for i, e := range []Element(d) {
-		if e.EName.String() == fmt.Sprintf("\"%s\"", name) {
+		if e.EName.String() == fmt.Sprintf("CString{%s}", name) {
 			return &[]Element(d)[i]
 		}
 	}

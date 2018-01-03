@@ -10,6 +10,16 @@ import (
 type CString string
 type String string
 
+func NewString(s string) *String {
+	out := String(s)
+	return &out
+}
+
+func NewCString(s string) *CString {
+	out := CString(s)
+	return &out
+}
+
 // cstring ::= (byte*) "\x00"
 // Zero or more modified UTF-8 encoded characters followed by '\x00'.
 // The (byte*) MUST NOT contain '\x00', hence it is not full UTF-8.
@@ -39,7 +49,7 @@ func (s *CString) Deserialize(in *bytes.Reader) error {
 }
 
 func (s CString) String() string {
-	return "\"" + string(s) + "\""
+	return "CString{" + string(s) + "}"
 }
 
 // string  ::= int32 (byte*) "\x00"
@@ -92,10 +102,15 @@ func (s *String) Deserialize(in *bytes.Reader) error {
 }
 
 func (s String) String() string {
-	return "\"" + string(s) + "\""
+	return "String{" + string(s) + "}"
 }
 
 type Double float64
+
+func NewDouble(d float64) *Double {
+	out := Double(d)
+	return &out
+}
 
 func (d *Double) Serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
@@ -114,6 +129,11 @@ func (d Double) String() string {
 }
 
 type Int32 int32
+
+func NewInt32(i int32) *Int32 {
+	out := Int32(i)
+	return &out
+}
 
 func (i Int32) Serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
